@@ -103,6 +103,11 @@ userSchema.virtual("posts", {
     localField: '_id'
 });
 
+// Virtual Method to add accountType to user
+userSchema.virtual("accountType").get(function () {
+    const follwersCount = this.followers?.length;
+    return follwersCount >= 5 ? "Pro Account" : "Starter Account";
+});
 
 // Pre Hooks
 userSchema.pre('save', async function(next) {
