@@ -23,11 +23,17 @@ const createPostCtrl = expressAsyncHandler( async (req, res) => {
     }
 
     try {
-        const localPath = `public/images/posts/${req.file.filename}`;
-        const imageUploaded = await cloudinaryUploadImg(localPath);
-        const post = await Post.create({...req?.body, image: imageUploaded?.url, user: _id });
-        res.json(post);
-        fs.unlinkSync(localPath);
+        if(req?.file) {
+            const localPath = `public/images/posts/${req?.file?.filename}`;
+            const imageUploaded = await cloudinaryUploadImg(localPath);
+            
+            const post = await Post.create({...req?.body, image: imageUploaded?.url, user: _id });
+            res.json(post);
+            fs.unlinkSync(localPath);
+        } else {
+            const post = await Post.create({...req?.body, user: _id });
+            res.json(post);
+        }
     } catch (error) {
         res.json(error);
     }
@@ -35,8 +41,15 @@ const createPostCtrl = expressAsyncHandler( async (req, res) => {
 
 // Fetch all posts
 const fetchPostsCtrl = expressAsyncHandler( async (req, res) => {
+    const hasCategory = req?.query?.category;
+    // console.log(hasCategory);
     try {
-        const posts = await Post.find({}).sort('-createdAt').populate('user');
+        let posts;
+        if(hasCategory) {
+            posts = await Post.find({ category: hasCategory }).sort('-createdAt').populate('user');
+        } else {
+            posts = await Post.find({}).sort('-createdAt').populate('user');
+        }
         res.json(posts);
     } catch (error) {
         res.json(error);
@@ -53,7 +66,7 @@ const fetchPostCtrl = expressAsyncHandler( async (req, res) => {
 
         const updatedPost = await Post.findByIdAndUpdate(id, {
             $inc: { numViews: 1 }
-        }, { new: true }).populate('user').populate('likes').populate('dislikes');
+        }, { new: true }).populate('user').populate('likes').populate('dislikes').populate('comments');
         res.json(updatedPost);
     } catch (error) {
         res.json(error);
@@ -62,7 +75,7 @@ const fetchPostCtrl = expressAsyncHandler( async (req, res) => {
 
 // Update Post Controller
 const updatePostCtrl = expressAsyncHandler( async (req, res) => {
-    // console.log(req?.body);
+    console.log(req?.body);
     const { id } = req?.params;
     validateMongodbId(id);
     const { _id } = req?.user;
@@ -80,12 +93,13 @@ const updatePostCtrl = expressAsyncHandler( async (req, res) => {
     try {
         let post;
         if(req.file) {
-            const localPath = `public/images/posts/${req.file.filename}`;
-            const imageUploaded = await cloudinaryUploadImg(localPath);
+            // const localPath = `public/images/posts/${req.file.filename}`;
+            // const imageUploaded = await cloudinaryUploadImg(localPath);
             post = await Post.findByIdAndUpdate(id, {
-                ...req?.body, image: imageUploaded?.url
+                ...req?.body
+                // , image: imageUploaded?.url
             }, { new: true });
-            fs.unlinkSync(localPath);
+            // fs.unlinkSync(localPath);
         } else {
             // console.log(req?.body);
             post = await Post.findByIdAndUpdate(id, {

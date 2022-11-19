@@ -12,7 +12,7 @@ sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
 
 // User Registration Function
 const userRegisterCtrl = expressAsyncHandler(async (req, res) => {
-    console.log(req.body);
+    // console.log(req.body);
     const { firstName, lastName, email, password } = req?.body;
     const userExist = await User.findOne({ email });
     if(userExist) {
@@ -44,7 +44,8 @@ const userLoginCtrl = expressAsyncHandler(async (req, res) => {
             email: userExist?.email,
             profilePhoto: userExist?.profilePhoto,
             isAdmin: userExist?.isAdmin,
-            token: generateToken(userExist._id)
+            token: generateToken(userExist._id),
+            isAccountVerified: userExist?.isAccountVerified
         });
     }
     else{
@@ -101,10 +102,36 @@ const fetchUserCtrl = expressAsyncHandler(async (req, res) => {
 // User Profile
 const userProfileCtrl = expressAsyncHandler(async (req, res) => {
     const { id } = req.params;
+    const { _id: loggedInUserId } = req?.user;
     validateMongodbId(id);
+
     try {
-        const user = await User.findById(id).populate('posts');
-        res.json(user);
+        // Find the profile user data using Id.
+        var user = await User.findById(id).populate('posts').populate('viewedBy');
+
+        // Check if the loggedInUserId is already exist in the viewedBy of profile user.
+        const alreadyViewedBy = user?.viewedBy?.find(user => user?._id?.toString() === loggedInUserId?.toString());
+
+        // if the loggedInUserId is already in the viewedBy of profile user or the loggedInUserId is same as the profile user Id, then we will return the data.
+        if(alreadyViewedBy || (user?._id?.toString() === loggedInUserId?.toString())) {
+            res.json(user);
+        } else {
+            const user =  await User.findByIdAndUpdate(id, {
+                $push: {
+                    viewedBy: loggedInUserId,
+                }
+            }, { new: true}).populate('posts').populate('viewedBy');
+            res.json(user);
+        }
+
+        // console.log(user?.viewedBy);
+
+        // if we required to check the loggedIn user is already follow or not to request profile user.
+        // if(user) {
+        //     const isFollowedUser = user?.followers?.find(userId => userId.toString() === loggedInUserId.toString());
+        //     user.isFollowedUser = isFollowedUser;
+        // }
+        // res.json(user);
     } catch (error) {
         res.json(error);
     }
@@ -261,19 +288,19 @@ const sampleMailSendRequest = expressAsyncHandler( async (req, res) => {
 
 // Generate Email verification token
 const generateVerificationTokenCtrl = expressAsyncHandler(async (req, res) => {
-    user = req?.user;
+    const user = req?.user;
         if(user?.isAccountVerified) {
             throw new Error(`${user.firstName} ${user.lastName} is already verified`);
         }
     
     try {
-        const verificationToken = await user.createAccountVerificatioToken();
+        const verificationToken = await user?.createAccountVerificatioToken();
         await user.save();
 
         const resetURL = `If you were requested to verify your account, verify now within 10 minutes, otherwise ignore this message <a href="http://localhost:3000/verify-account/${verificationToken}">Click to verify your account</a>`;
 
         const msg = {
-            to: req?.user?.email,
+            to: user?.email,
             from: process.env.SEND_GRID_FROM_MAIL,
             subject: 'Email verification',
             html: resetURL

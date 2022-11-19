@@ -8,8 +8,7 @@ const postSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: [true, "Post Category is required"],
-        default: "All"
+        required: [true, "Post Category is required"]
     },
     isLiked: {
         type: Boolean,
@@ -54,6 +53,13 @@ const postSchema = new mongoose.Schema({
     },
     toObject: { virtuals: true },
     timestamps: true
+});
+
+// Setup a virtual method to populate the comments
+postSchema.virtual('comments', {
+    ref: "Comment",
+    foreignField: "post",
+    localField: "_id"
 });
 
 // Compile
