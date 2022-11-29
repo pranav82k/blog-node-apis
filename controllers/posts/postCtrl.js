@@ -5,15 +5,25 @@ const User = require("../../model/user/User");
 const cloudinaryUploadImg = require("../../utils/cloudinary");
 const fs = require('fs');
 const validateMongodbId = require("../../utils/validateMongodbID");
+const blockUser = require("../../utils/blockUser");
+const Comment = require("../../model/comment/Comment");
 
 // Create Post
 const createPostCtrl = expressAsyncHandler( async (req, res) => {
     // console.log(req.body);
     const { _id } = req?.user;
-    // console.log(req.file);
+
+    // Check if user is blocked
+    blockUser(req?.user);
+
+    // Prevent to create the post, if user accountType is starter and have done with maximum post creation
+    if(req?.user?.accountType === "Starter Account" && req?.user?.postCount >= 2) {
+        throw new Error(`You have reached the maximum post creation, upgrade your account to Pro by increasing your followers.`);
+    }
+
     // Check for bad words
     const filter = new Filter();
-    const isProfane = filter.isProfane(req?.body?.title, req?.body?.description);
+    const isProfane = filter.isProfane(req?.body?.title?.toLowerCase(), req?.body?.description?.toLowerCase());
     if(isProfane) {
         await User.findByIdAndUpdate(_id, {
             isBlocked: true
@@ -27,7 +37,14 @@ const createPostCtrl = expressAsyncHandler( async (req, res) => {
             const localPath = `public/images/posts/${req?.file?.filename}`;
             const imageUploaded = await cloudinaryUploadImg(localPath);
             
+            // Create the post
             const post = await Post.create({...req?.body, image: imageUploaded?.url, user: _id });
+
+            // Update the user's postCount
+            const user = await User.findByIdAndUpdate(_id, {
+                $inc: { postCount: 1}
+            }, { new: true });
+
             res.json(post);
             fs.unlinkSync(localPath);
         } else {
@@ -75,13 +92,17 @@ const fetchPostCtrl = expressAsyncHandler( async (req, res) => {
 
 // Update Post Controller
 const updatePostCtrl = expressAsyncHandler( async (req, res) => {
-    console.log(req?.body);
+    
     const { id } = req?.params;
     validateMongodbId(id);
+
     const { _id } = req?.user;
     
+    // Check if user is blocked
+    blockUser(req?.user);
+
     const filter = new Filter();
-    const isProfane = filter.isProfane(req?.title, req?.body);
+    const isProfane = filter.isProfane(req?.title?.toLowerCase(), req?.body?.toLowerCase());
     if(isProfane) {
         await User.findByIdAndUpdate(_id, {
             isBlocked: true
@@ -120,6 +141,8 @@ const deletePostCtrl = expressAsyncHandler( async (req, res) => {
     try {
         const deletedPost = await Post.findByIdAndDelete(id);
         if(deletedPost) {
+            // delete all the comments of the post
+            const deletedComment = await Comment.deleteMany({ post: deletedPost?._id });
             res.json(deletedPost);
         } else {
             res.status(500).json({message: 'Couldn\'t find post with id ' + id});

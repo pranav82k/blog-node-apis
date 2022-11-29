@@ -5,7 +5,7 @@ const path = require('path');
 const multerStorage = multer.memoryStorage();
 
 const multerFilter = (req, file, cb) => {
-    console.log(req.body);
+    // console.log(req.body);
     if(file?.mimetype.startsWith('image')) {
         cb(null, true);
     } else {

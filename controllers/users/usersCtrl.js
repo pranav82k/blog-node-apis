@@ -7,6 +7,7 @@ const generateToken = require("../../config/token/generateToken");
 const validateMongodbId = require("../../utils/validateMongodbID");
 const mongoose = require("mongoose");
 const cloudinaryUploadImg = require("../../utils/cloudinary");
+const blockUser = require("../../utils/blockUser");
 
 sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
 
@@ -36,7 +37,9 @@ const userLoginCtrl = expressAsyncHandler(async (req, res) => {
     const userExist = await User.findOne({ email });
     // console.log(await userExist.isPasswordMatched(password));
     if(userExist && await userExist.isPasswordMatched(password)) {
-        // res.json(userExist);
+        // Check if user is blocked
+        blockUser(userExist);
+        
         res.json({
             _id: userExist?._id,
             firstName: userExist?.firstName,
@@ -50,7 +53,7 @@ const userLoginCtrl = expressAsyncHandler(async (req, res) => {
     }
     else{
         res.status(401);
-        throw new Error('Invalide Email or Password');
+        throw new Error('Invalid Email or Password');
     }
 });
 
@@ -59,7 +62,7 @@ const fetchAllUsersCtrl = expressAsyncHandler(async (req, res) => {
     try {
         // const users = await User.find({}).sort('-createdAt');
         // const users = await User.find({}).select('-password').sort('-createdAt').skip(1).limit(1);
-        const users = await User.find({}).select('-password').sort('-createdAt');
+        const users = await User.find({}).select('-password').sort('-createdAt').populate("posts");
         res.json(users);
     } catch (error) {
         res.json(error);
@@ -72,12 +75,10 @@ const deleteUserCtrl = expressAsyncHandler(async (req, res) => {
     validateMongodbId(id);
     try {
         const deletedUser = await User.findByIdAndDelete(id);
-        console.log(deletedUser);
+        // console.log(deletedUser);
         if(deletedUser) {
-            console.log('yes')
             res.json(deletedUser);
         } else {
-            console.log('no');
             res.status(202).json({ message: 'User Already Deleted' });
             // throw new Error('User Already deleted'); // throw error is not working inside try
         }
@@ -273,7 +274,7 @@ const sampleMailSendRequest = expressAsyncHandler( async (req, res) => {
             subject: 'My First Mail Request',
             text: 'This is my first mail request',
         };
-        console.log(msg);
+        // console.log(msg);
 
         await sgMail.send(msg);
         res.json({
@@ -352,7 +353,7 @@ const forgotPasswordTokenCtrl = expressAsyncHandler( async (req, res) => {
         const token = await user.createResetPasswordToken();
         await user.save();
 
-        resetURL = `If you were requested to reset your password, please reset now within 10 minutes, otherwise ignore this message <a href="https://localhost:3000/reset-password/${token}">Click to reset password</a>`;
+        resetURL = `If you were requested to reset your password, please reset now within 10 minutes, otherwise ignore this message <a href="http://localhost:3000/reset-password/${token}">Click to reset password</a>`;
 
         msg = {
             to: email,
@@ -376,7 +377,7 @@ const passwordResetCtrl = expressAsyncHandler( async (req, res) => {
     const { token, password } = req?.body;
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-    const user = await User.findOne({ token: hashedToken, passwordResetExpires: { $gt: Date.now() }});
+    const user = await User.findOne({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: Date.now() }});
     if(!user) throw new Error(`Token expired, please try again`);
 
     user.password = password;
@@ -396,7 +397,7 @@ const uploadProfilePhoto = expressAsyncHandler( async (req, res) => {
 
     const localPath = `public/images/profile/${req.file.filename}`;
     const imageUploaded = await cloudinaryUploadImg(localPath);
-    console.log(imageUploaded);
+    // console.log(imageUploaded);
     
     const user = await User.findByIdAndUpdate(_id, {
         profilePhoto: imageUploaded?.url

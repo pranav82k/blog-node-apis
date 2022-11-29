@@ -17,6 +17,14 @@ const PORT = process.env.PORT || 5000;
 // Database connectivity function
 dbConnect();
 
+// Route
+app.get('/', (req, res) => {
+    res.json({
+        "status": 1,
+        "message": "Welcome to the backend of blog application!"
+    });
+});
+
 // Middeware for json parsing
 app.use(express.json());
 
