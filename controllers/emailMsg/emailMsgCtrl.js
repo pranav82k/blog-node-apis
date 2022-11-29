@@ -1,6 +1,6 @@
 const expressAsyncHandler = require("express-async-handler");
 const EmailMsg = require("../../model/EmailMessaging/EmailMessaging");
-const sgMail = require('@Sendgrid/mail');
+const sgMail = require('@sendgrid/mail');
 const Filter = require('bad-words');
 
 sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
